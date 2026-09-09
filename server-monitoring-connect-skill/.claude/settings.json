@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(mkdir:*)",
+      "Bash(jq:*)",
+      "Bash(date:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(git *)",
+      "Write(.claude/skills/**)",
+      "Edit(.claude/skills/**)",
+      "Read(.claude/skills/**)"
+    ]
+  }
+}
