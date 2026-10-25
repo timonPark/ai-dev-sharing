@@ -1,48 +1,48 @@
 # ai-dev-sharing
 
-Claude Code 스킬 및 AI 개발 워크플로우 명세 모음입니다.
+A collection of Claude Code skills and AI development workflow specifications.
 
-## 구성
+## Contents
 
 ### backend-feature-builder.md
 
-신규 API · 동기화 로직 · 집계 · 연동 기능 구현을 위한 9단계 에이전트 워크플로우 명세입니다.
+A 9-step agent workflow specification for implementing new APIs, sync logic, aggregations, and integrations.
 
-| 단계 | 스킬 | 내용 |
+| Step | Skill | Description |
 |---|---|---|
-| Step 1 | `issue-kickoff` | 브랜치 생성 + Jira 이슈 조회 |
-| Step 2 | GATE | 요구사항 4가지 확인 |
-| Step 3 | `brainstorming` | 설계 탐색 및 합의 |
-| Step 4 | `writing-plans` | 레이어별 구현 청사진 작성 |
-| Step 5 | `tdd-service` | TDD 사이클 구현 |
-| Step 6 | `codex-review` | AI 간 교차 코드 리뷰 |
-| Step 7 | — | 리뷰 결과 반영 |
-| Step 8 | `postman-doc` | API 문서 자동 생성 |
-| Step 9 | `commit` / `pr` | 커밋 · 푸시 · PR 생성 |
+| Step 1 | `issue-kickoff` | Create branch + fetch Jira issue |
+| Step 2 | GATE | Verify 4 requirement items |
+| Step 3 | `brainstorming` | Design exploration and agreement |
+| Step 4 | `writing-plans` | Write per-layer implementation blueprint |
+| Step 5 | `tdd-service` | TDD cycle implementation |
+| Step 6 | `codex-review` | Cross-AI code review |
+| Step 7 | — | Apply review feedback |
+| Step 8 | `postman-doc` | Auto-generate API documentation |
+| Step 9 | `commit` / `pr` | Commit · push · create PR |
 
-진입점: `/work-manager {Jira 이슈 URL 또는 이슈키}`
+Entry point: `/work-manager {Jira issue URL or issue key}`
 
 ---
 
 ### server-monitoring-connect-skill/
 
-Grafana(Loki · Tempo · Prometheus) 연동 Claude Code 스킬 모음입니다.  
-운영 서버의 로그 · 트레이스 · 메트릭을 CLI에서 조회합니다.
+A collection of Claude Code skills integrated with Grafana (Loki · Tempo · Prometheus).
+Query production server logs, traces, and metrics from the CLI.
 
-| 스킬 | 백엔드 | 용도 |
+| Skill | Backend | Purpose |
 |---|---|---|
-| `/prod-log` | Loki | production-1~4 로그 일괄 조회 |
-| `/prod-metrics` | Prometheus | PromQL 메트릭 조회 |
-| `/prod-trace` | Tempo | 특정 traceId 스팬 드릴다운 |
-| `/prod-trace-export` | Tempo | 서비스명 · minDuration 기준 트레이스 추출 |
-| `/tempo-search` | Tempo | TraceQL + 날짜 반복 조회 + CSV 생성 |
+| `/prod-log` | Loki | Batch query logs across production-1~4 |
+| `/prod-metrics` | Prometheus | Query metrics via PromQL |
+| `/prod-trace` | Tempo | Drill down into spans of a specific traceId |
+| `/prod-trace-export` | Tempo | Extract traces by service name · minDuration |
+| `/tempo-search` | Tempo | TraceQL + per-date iterative query + CSV generation |
 
-권장 사용 순서:
+Recommended usage order:
 ```
-1. /prod-metrics      → 이상 구간 시간대 확인
-2. /prod-log          → 해당 시간대 에러·슬로우 로그 확인
-3. /prod-trace-export → 느린 트레이스 목록 추출
-4. /prod-trace        → 특정 traceId 스팬 드릴다운
+1. /prod-metrics      → Identify anomalous time windows
+2. /prod-log          → Check error/slow logs in that window
+3. /prod-trace-export → Extract list of slow traces
+4. /prod-trace        → Drill down into spans of a specific traceId
 ```
 
-설정: `server-monitoring-connect-skill/config/env/.env`에 모니터링 서버 정보 입력
+Configuration: enter monitoring server details in `server-monitoring-connect-skill/config/env/.env`

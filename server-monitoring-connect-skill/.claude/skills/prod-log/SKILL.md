@@ -1,6 +1,6 @@
 ---
 name: prod-log
-description: 운영 모니터링 서버(Loki)에서 production-1~4 로그를 일괄 조회한다. 시간 범위와 검색 키워드를 먼저 확인한 후 조회하며, 결과는 prod_log/{날짜-키워드}/ 폴더에 서버별 JSON 파일로 저장한다. 사용자가 "운영 로그", "prod 로그", "로그 조회", "로그 검색" 등을 요청하면 사용한다.
+description: Batch query production-1~4 logs from the production monitoring server (Loki). Confirms time range and search keyword first, then queries; results are saved to prod_log/{date-keyword}/ as per-server JSON files. Use when the user requests "prod logs", "production logs", "log query", "log search", etc.
 allowed-tools:
   [
     'Bash(curl:*)',
@@ -15,91 +15,91 @@ allowed-tools:
 
 # prod-log
 
-운영 모니터링 서버(Loki)에서 production-1 ~ production-4 로그를 일괄 조회하고 결과를 JSON 파일로 저장한다.
+Batch query production-1 ~ production-4 logs from the production monitoring server (Loki) and save results as JSON files.
 
-## 사용법
+## Usage
 
 ```
 /prod-log
 ```
 
-## 환경 정보
+## Environment
 
-- **Loki 주소**: `config/env/.env`의 `MONITORING_SERVER_IP` 값 사용 → `http://3.39.48.65:3100`
-- **조회 대상 서버**: `production-1`, `production-2`, `production-3`, `production-4`
-- **인증**: Bearer token (`config/env/.env`의 `MONITORING_API_TOKEN`)
-- **저장 경로**: 프로젝트 루트 `prod_log/` 폴더
+- **Loki address**: use `MONITORING_SERVER_IP` from `config/env/.env` → `http://3.39.48.65:3100`
+- **Target servers**: `production-1`, `production-2`, `production-3`, `production-4`
+- **Auth**: Bearer token (`MONITORING_API_TOKEN` in `config/env/.env`)
+- **Save path**: `prod_log/` folder at the project root
 
-## 프로세스
+## Process
 
-### 1단계: 필수 정보 수집 (조회 전 반드시 확인)
+### Step 1: Collect required info (must confirm before querying)
 
-**1-1. 시간 범위 + 검색 유형을 `AskUserQuestion`으로 동시에 질문한다.**
+**1-1. Ask for time range + search type simultaneously via `AskUserQuestion`.**
 
-**시간 범위** 옵션:
-- 최근 5분
-- 최근 30분
-- 최근 1시간
-- 최근 3시간
-- 최근 6시간
-- 직접 입력 (분 단위)
+**Time range** options:
+- Last 5 minutes
+- Last 30 minutes
+- Last 1 hour
+- Last 3 hours
+- Last 6 hours
+- Custom (in minutes)
 
-**검색 유형** 옵션:
+**Search type** options:
 - userIdx
-- URI 경로
-- 에러 메시지
-- 직접 입력
+- URI path
+- Error message
+- Custom
 
-**1-2. 검색 값을 `AskUserQuestion`으로 추가 질문한다.**
+**1-2. Ask for the search value via a separate `AskUserQuestion`.**
 
-1-1에서 선택한 검색 유형에 따라 실제 검색할 값을 별도로 질문한다.
-- userIdx 선택 시 → "검색할 userIdx 값을 입력해주세요."
-- URI 경로 선택 시 → "검색할 URI 경로를 입력해주세요. (예: /m/message/list)"
-- 에러 메시지 선택 시 → "검색할 에러 메시지 키워드를 입력해주세요."
-- 직접 입력 선택 시 → "검색할 키워드를 입력해주세요."
+Depending on the search type chosen in 1-1, ask for the actual value to search for.
+- userIdx selected → "Please enter the userIdx value to search for."
+- URI path selected → "Please enter the URI path to search for. (e.g., /m/message/list)"
+- Error message selected → "Please enter the error-message keyword to search for."
+- Custom selected → "Please enter the keyword to search for."
 
-→ 시간 범위와 검색 값 **둘 다** 확인되지 않으면 조회를 진행하지 않는다.
+→ Do not proceed with the query unless **both** time range and search value are confirmed.
 
-### 2단계: 저장 폴더 생성
+### Step 2: Create save folder
 
-폴더명 규칙:
-- 형식: `{YYYY-MM-DD-HHmmss}-{키워드슬러그}`
-- 날짜·시간: 조회 시점의 년월일시분초 (`2026-07-02-114512` 형태)
-- 키워드슬러그: 검색 키워드에서 영문·숫자·하이픈·언더스코어만 남기고 나머지 특수문자(`:`, `"`, `/`, `{`, `}`, 공백 등)는 모두 제거한다.
-- 예) 키워드 `6a1555c237760446d7546fec` → `prod_log/2026-07-02-114512-6a1555c237760446d7546fec/`
-- 검색 시간 범위는 폴더명에 포함하지 않는다.
+Folder naming rules:
+- Format: `{YYYY-MM-DD-HHmmss}-{keyword-slug}`
+- Date/time: year-month-day-hour-min-sec at query time (`2026-07-02-114512` style)
+- Keyword slug: keep only alphanumerics, hyphens, and underscores from the keyword; strip all other special characters (`:`, `"`, `/`, `{`, `}`, spaces, etc.).
+- Example: keyword `6a1555c237760446d7546fec` → `prod_log/2026-07-02-114512-6a1555c237760446d7546fec/`
+- The search time range is not part of the folder name.
 
 ```bash
 DATETIME=$(date '+%Y-%m-%d-%H%M%S')
-mkdir -p prod_log/${DATETIME}-{키워드슬러그}
+mkdir -p prod_log/${DATETIME}-{keyword-slug}
 ```
 
-### 3단계: 타임스탬프 계산
+### Step 3: Compute timestamps
 
-macOS 환경이므로 `python3`으로 나노초 타임스탬프를 생성한다.
+On macOS, use `python3` to generate nanosecond timestamps.
 
 ```bash
 END=$(python3 -c "import time; print(int(time.time() * 1e9))")
-START=$(python3 -c "import time; print(int((time.time() - {초}) * 1e9))")
+START=$(python3 -c "import time; print(int((time.time() - {seconds}) * 1e9))")
 ```
 
-시간 범위 → 초 변환:
-- 5분 → 300
-- 30분 → 1800
-- 1시간 → 3600
-- 3시간 → 10800
-- 6시간 → 21600
+Time range → seconds mapping:
+- 5 min → 300
+- 30 min → 1800
+- 1 hour → 3600
+- 3 hours → 10800
+- 6 hours → 21600
 
-### 4단계: 4개 서버 일괄 조회 및 저장
+### Step 4: Batch query 4 servers and save
 
-각 서버별로 Loki API를 호출하고 결과를 JSON 배열로 저장한다.
+For each server, call the Loki API and save the result as a JSON array.
 
 ```bash
 TOKEN=$(grep MONITORING_API_TOKEN config/env/.env | cut -d= -f2)
 for env in production-1 production-2 production-3 production-4; do
   curl -s "http://3.39.48.65:3100/loki/api/v1/query_range" \
     -H "Authorization: Bearer $TOKEN" \
-    --data-urlencode "query={env=\"$env\"} |= \`{키워드}\`" \
+    --data-urlencode "query={env=\"$env\"} |= \`{keyword}\`" \
     --data-urlencode "start=$START" \
     --data-urlencode "end=$END" \
     --data-urlencode 'limit=500' \
@@ -115,27 +115,27 @@ for line in sys.stdin:
     except:
         pass
 print(json.dumps(logs, ensure_ascii=False, indent=2))
-" > "prod_log/{폴더명}/${env}.json"
+" > "prod_log/{folder-name}/${env}.json"
 done
 ```
 
-### 5단계: 결과 요약 출력
+### Step 5: Print result summary
 
-각 서버별 저장 건수를 출력한다.
+Print per-server saved counts.
 
 ```
-production-1: N건
-production-2: N건
-production-3: N건
-production-4: N건
-저장 경로: prod_log/{폴더명}/
+production-1: N entries
+production-2: N entries
+production-3: N entries
+production-4: N entries
+Save path: prod_log/{folder-name}/
 ```
 
-건수가 0인 서버도 빈 배열 `[]`로 파일을 생성한다.
+Even servers with 0 results produce a file with an empty array `[]`.
 
-## 규칙
+## Rules
 
-- `start` / `end` 파라미터는 반드시 **나노초 Unix 타임스탬프** 정수를 사용한다. `"now"` 문자열은 지원되지 않는다.
-- JSON 파일은 **순수 로그 배열**만 담는다. 메타 정보나 마크다운은 포함하지 않는다.
-- 저장 파일명: `{env}.json` (예: `production-1.json`)
-- `prod_log/` 폴더는 `.gitignore`에 등록되어 있으므로 커밋되지 않는다.
+- `start` / `end` parameters must be **nanosecond Unix timestamp integers**. The string `"now"` is not supported.
+- JSON files contain **only the raw log array**. Do not include metadata or markdown.
+- Save file name: `{env}.json` (e.g., `production-1.json`)
+- The `prod_log/` folder is registered in `.gitignore` and is not committed.

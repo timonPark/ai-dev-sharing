@@ -1,6 +1,6 @@
 ---
 name: prod-trace
-description: 운영 모니터링 서버(Tempo)에서 특정 API 요청의 트레이스를 조회한다. 스팬별 소요 시간을 분석해 병목 구간을 파악하고 결과를 prod_trace/{폴더명}/ 에 저장한다. 성능 분석 시 사용한다.
+description: Query the trace of a specific API request from the production monitoring server (Tempo). Analyze per-span durations to identify bottlenecks and save results to prod_trace/{folder-name}/. Use during performance analysis.
 allowed-tools:
   [
     'Bash(curl:*)',
@@ -15,27 +15,27 @@ allowed-tools:
 
 # prod-trace
 
-운영 모니터링 서버(Tempo)에서 특정 API 요청의 트레이스를 조회한다.  
-스팬별 소요 시간을 분석해 어느 구간(DB, Redis, 외부 API 등)에서 병목이 발생하는지 파악한다.  
-성능 분석 체인(`03-performance-analyst`)의 4단계에서 사용한다.
+Query the trace of a specific API request from the production monitoring server (Tempo).
+Analyze per-span durations to identify which segment (DB, Redis, external API, etc.) is the bottleneck.
+Used in Step 4 of the performance analysis chain (`03-performance-analyst`).
 
-## 사용법
+## Usage
 
 ```
 /prod-trace
 ```
 
-## 환경 정보
+## Environment
 
-- **Tempo 주소**: `config/env/.env`의 `MONITORING_SERVER_IP` 값 사용 → `http://{IP}:3200`
-- **인증**: Bearer token (`MONITORING_API_TOKEN`, `config/env/.env`에서 읽음)
-- **저장 경로**: 프로젝트 루트 `prod_trace/` 폴더
+- **Tempo address**: use `MONITORING_SERVER_IP` from `config/env/.env` → `http://{IP}:3200`
+- **Auth**: Bearer token (`MONITORING_API_TOKEN`, read from `config/env/.env`)
+- **Save path**: `prod_trace/` folder at the project root
 
-## 프로세스
+## Process
 
-### 1단계: 필수 정보 수집
+### Step 1: Collect required info
 
-IP와 토큰을 먼저 읽는다.
+First read the IP and token.
 
 ```bash
 MONITORING_IP=$(grep 'MONITORING_SERVER_IP' config/env/.env | cut -d'=' -f2 | tr -d ' ')
@@ -43,94 +43,94 @@ MONITORING_API_TOKEN=$(grep 'MONITORING_API_TOKEN' config/env/.env | cut -d'=' -
 TEMPO_URL="http://${MONITORING_IP}:3200"
 ```
 
-`AskUserQuestion`으로 아래 두 가지를 동시에 확인한다.
+Confirm the two items below simultaneously via `AskUserQuestion`.
 
-**조회 방식** 옵션:
-- 특정 traceId로 조회 (traceId를 이미 알고 있는 경우)
-- 서비스명 + 작업명으로 검색
-- HTTP 경로로 검색 (예: /m/medication/list)
-- 느린 트레이스 검색 (특정 응답시간 이상)
+**Query mode** options:
+- Direct lookup by specific traceId (when the traceId is already known)
+- Search by service name + operation name
+- Search by HTTP path (e.g., /m/medication/list)
+- Search slow traces (above a given response time)
 
-**시간 범위** 옵션:
-- 최근 30분
-- 최근 1시간
-- 최근 3시간
-- 직접 입력 (분 단위)
+**Time range** options:
+- Last 30 minutes
+- Last 1 hour
+- Last 3 hours
+- Custom (in minutes)
 
-### 2단계: 저장 폴더 생성
+### Step 2: Create save folder
 
 ```bash
 DATETIME=$(date '+%Y-%m-%d-%H%M%S')
 mkdir -p prod_trace/${DATETIME}-trace
 ```
 
-### 3단계: 트레이스 검색 및 조회
+### Step 3: Search / fetch traces
 
-#### 방식 A: traceId로 직접 조회
+#### Mode A: Direct lookup by traceId
 
 ```bash
 curl -s \
   -H "Authorization: Bearer ${MONITORING_API_TOKEN}" \
   "http://{MONITORING_SERVER_IP}:3200/api/traces/{traceId}" | \
-  jq '.' > "prod_trace/{폴더명}/trace-{traceId}.json"
+  jq '.' > "prod_trace/{folder-name}/trace-{traceId}.json"
 ```
 
-#### 방식 B: 태그 기반 검색 (HTTP 경로, 서비스명 등)
+#### Mode B: Tag-based search (HTTP path, service name, etc.)
 
-Tempo Search API를 사용한다. 반드시 `curl -G` GET 방식을 사용한다 (POST 방식은 필터가 무시됨).
+Use the Tempo Search API. Must use `curl -G` GET method (filters are ignored with POST).
 
 ```bash
 curl -G -s \
   -H "Authorization: Bearer ${MONITORING_API_TOKEN}" \
   "http://{MONITORING_SERVER_IP}:3200/api/search" \
-  --data-urlencode "tags=http.url={경로}" \
+  --data-urlencode "tags=http.url={path}" \
   --data-urlencode "minDuration=1000ms" \
   --data-urlencode "start=$START" \
   --data-urlencode "end=$END" \
   --data-urlencode "limit=20" | \
-  jq '.' > "prod_trace/{폴더명}/search-result.json"
+  jq '.' > "prod_trace/{folder-name}/search-result.json"
 ```
 
-검색 결과에서 traceId 목록을 추출하고, 상위 5개를 개별 조회한다.
+Extract the traceId list from the search result and look up the top 5 individually.
 
 ```bash
-# search-result.json에서 traceId 추출 후 각각 조회
-jq -r '.traces[].traceID' prod_trace/{폴더명}/search-result.json | head -5 | while read traceId; do
+# Extract traceIds from search-result.json and look up each one
+jq -r '.traces[].traceID' prod_trace/{folder-name}/search-result.json | head -5 | while read traceId; do
   curl -s \
     -H "Authorization: Bearer ${MONITORING_API_TOKEN}" \
     "http://{MONITORING_SERVER_IP}:3200/api/traces/${traceId}" | \
-    jq '.' > "prod_trace/{폴더명}/trace-${traceId}.json"
+    jq '.' > "prod_trace/{folder-name}/trace-${traceId}.json"
 done
 ```
 
-### 4단계: 스팬 분석 요약
+### Step 4: Span analysis summary
 
-저장된 트레이스 파일을 읽어 스팬별 소요 시간을 분석한다.
+Read the saved trace files and analyze per-span durations.
 
-분석 항목:
-- 전체 요청 소요 시간
-- 스팬별 소요 시간 (DB 쿼리, Redis, 외부 API, 내부 함수 등)
-- 가장 오래 걸린 스팬 Top 5
-- 병렬 vs 직렬 구간 파악
+Analysis items:
+- Total request duration
+- Per-span duration (DB query, Redis, external API, internal functions, etc.)
+- Top 5 slowest spans
+- Parallel vs serial segments
 
-### 5단계: 결과 요약 출력
+### Step 5: Print result summary
 
 ```
-✅ 트레이스 조회 완료
-- 조회 traceId 수: N건
-- 저장 경로: prod_trace/{폴더명}/
+✅ Trace query complete
+- Number of traceIds queried: N
+- Save path: prod_trace/{folder-name}/
 
-병목 구간 요약:
-- 전체 응답시간: Nms
-- DB 쿼리 구간: Nms (전체의 N%)
-- Redis 구간: Nms (전체의 N%)
-- 가장 느린 스팬: {스팬명} Nms
+Bottleneck summary:
+- Total response time: N ms
+- DB query segment: N ms (N% of total)
+- Redis segment: N ms (N% of total)
+- Slowest span: {span name} N ms
 ```
 
-## 규칙
+## Rules
 
-- `start` / `end`는 **초 단위** Unix 타임스탬프 정수를 사용한다.
-- Tempo Search API(방식 B)는 반드시 `curl -G` GET 방식을 사용한다. POST 방식은 필터가 무시된다.
-- 트레이스 파일은 크기가 클 수 있으므로 상위 5건만 개별 조회한다.
-- `prod_trace/` 폴더는 `.gitignore`에 등록한다.
-- traceId를 직접 알고 있으면 방식 A, 모르면 방식 B로 진행한다.
+- `start` / `end` must be **integer Unix timestamps in seconds**.
+- The Tempo Search API (Mode B) must use `curl -G` GET method. Filters are ignored with POST.
+- Trace files can be large, so only look up the top 5 individually.
+- Register the `prod_trace/` folder in `.gitignore`.
+- Use Mode A if the traceId is known directly, otherwise use Mode B.

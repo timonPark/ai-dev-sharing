@@ -1,52 +1,52 @@
 # CLAUDE.md
 
-이 프로젝트는 운영 서버 모니터링을 위한 Claude Code 스킬 저장소입니다.  
-Grafana(Loki · Tempo · Prometheus)와 연동해 로그·트레이스·메트릭을 조회합니다.
+This project is a Claude Code skill repository for production server monitoring.
+It integrates with Grafana (Loki · Tempo · Prometheus) to query logs, traces, and metrics.
 
-## 환경 정보
+## Environment
 
-- **모니터링 서버 IP**: `config/env/.env`의 `MONITORING_SERVER_IP`
-- **인증 토큰**: `config/env/.env`의 `MONITORING_API_TOKEN`
-- **Loki**: `http://{IP}:3100` — 나노초 타임스탬프, Bearer token 인증
-- **Tempo**: `http://{IP}:3200` — 초 단위 타임스탬프, Bearer token 인증
-- **Prometheus**: `http://{IP}:9090` — 초 단위 타임스탬프, Bearer token 인증
-- **OS**: macOS (타임스탬프 계산 시 `python3` 사용, `date -d` 사용 불가)
+- **Monitoring server IP**: `MONITORING_SERVER_IP` in `config/env/.env`
+- **Auth token**: `MONITORING_API_TOKEN` in `config/env/.env`
+- **Loki**: `http://{IP}:3100` — nanosecond timestamps, Bearer token auth
+- **Tempo**: `http://{IP}:3200` — second-precision timestamps, Bearer token auth
+- **Prometheus**: `http://{IP}:9090` — second-precision timestamps, Bearer token auth
+- **OS**: macOS (use `python3` for timestamp calculation; `date -d` is not available)
 
-## 스킬 목록
+## Skill list
 
-| 스킬 | 백엔드 | 용도 |
+| Skill | Backend | Purpose |
 |---|---|---|
-| `/prod-log` | Loki | production-1~4 로그 일괄 조회 |
-| `/prod-metrics` | Prometheus | PromQL 메트릭 조회 |
-| `/prod-trace` | Tempo | 특정 traceId 스팬 드릴다운 |
-| `/prod-trace-export` | Tempo | 서비스명·minDuration 기준 트레이스 목록 추출 |
-| `/tempo-search` | Tempo | TraceQL + 날짜 반복 조회 + CSV 생성 |
-| `/dcare-user-detail` | D.CARE Admin API | userIdx로 회원 상세 조회 |
-| `/extract-access-token` | D.CARE Admin API + Loki | userIdx로 회원 accessToken 추출 |
+| `/prod-log` | Loki | Batch query logs across production-1~4 |
+| `/prod-metrics` | Prometheus | Query metrics via PromQL |
+| `/prod-trace` | Tempo | Drill down into spans of a specific traceId |
+| `/prod-trace-export` | Tempo | Extract list of traces by service name · minDuration |
+| `/tempo-search` | Tempo | TraceQL + per-date iterative query + CSV generation |
+| `/dcare-user-detail` | D.CARE Admin API | Look up member details by userIdx |
+| `/extract-access-token` | D.CARE Admin API + Loki | Extract member accessToken by userIdx |
 
-## 타임스탬프 규칙
+## Timestamp rules
 
-백엔드마다 단위가 다르므로 반드시 구분해서 사용한다.
+Each backend uses a different unit, so always distinguish between them.
 
-| 백엔드 | 단위 | 생성 방법 |
+| Backend | Unit | How to generate |
 |---|---|---|
-| Loki | 나노초 | `int(time.time() * 1e9)` |
-| Tempo | 초 | `int(time.time())` |
-| Prometheus | 초 | `int(time.time())` |
+| Loki | nanoseconds | `int(time.time() * 1e9)` |
+| Tempo | seconds | `int(time.time())` |
+| Prometheus | seconds | `int(time.time())` |
 
-## 결과 저장 경로
+## Output save paths
 
-모든 조회 결과는 아래 경로에 저장하며 커밋하지 않는다.
+All query results are saved to the paths below and are not committed.
 
 ```
-prod_log/       ← Loki 로그 조회 결과
-prod_trace/     ← Tempo 트레이스 조회 결과
-prod_metrics/   ← Prometheus 메트릭 조회 결과
-config/env/     ← 환경 변수 (IP, 토큰)
+prod_log/       ← Loki log query results
+prod_trace/     ← Tempo trace query results
+prod_metrics/   ← Prometheus metric query results
+config/env/     ← Environment variables (IP, token)
 ```
 
-## 주의사항
+## Notes
 
-- `tempo-search` 스킬은 반드시 `curl -G` GET 방식을 사용한다. POST 방식은 TraceQL 필터가 무시된다.
-- 조회 결과가 0건이면 오류가 아니다. 시간 범위나 검색 조건을 조정해 재시도를 안내한다.
-- `config/env/.env`는 `.gitignore`에 등록되어 있어 커밋되지 않는다.
+- The `tempo-search` skill must use `curl -G` GET method. The POST method causes TraceQL filters to be ignored.
+- Zero results do not indicate an error. Guide the user to adjust the time range or search conditions and retry.
+- `config/env/.env` is registered in `.gitignore` and is not committed.

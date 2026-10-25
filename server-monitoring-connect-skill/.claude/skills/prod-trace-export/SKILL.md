@@ -1,6 +1,6 @@
 ---
 name: prod-trace-export
-description: Grafana Tempo에서 서비스명·최소 소요시간 기준으로 트레이스 목록을 검색하고 결과를 파일로 저장한다. Grafana Explore UI의 Tempo Search 탭 결과를 CLI로 추출할 때 사용한다.
+description: Search for a trace list in Grafana Tempo by service name and minimum duration, saving the results to files. Use to extract the Grafana Explore UI Tempo Search tab results from the CLI.
 allowed-tools:
   [
     'Bash(curl:*)',
@@ -16,27 +16,27 @@ allowed-tools:
 
 # prod-trace-export
 
-Grafana Explore → Tempo → Search 탭에서 서비스명과 Duration을 지정했을 때 나오는 트레이스 목록을 CLI로 추출하고 파일로 저장한다.
+Extract the trace list that appears when specifying a service name and Duration in Grafana Explore → Tempo → Search tab, and save it to files.
 
-`prod-trace` 스킬이 특정 API 1개의 **스팬 드릴다운**(병목 분석)을 목적으로 한다면, 이 스킬은 서비스 전체에서 조건에 맞는 **트레이스 목록 일괄 추출**을 목적으로 한다.
+While the `prod-trace` skill targets **span drill-down** (bottleneck analysis) for a single API, this skill targets **batch extraction of a trace list** matching conditions across the entire service.
 
-## 사용법
+## Usage
 
 ```
 /prod-trace-export
 ```
 
-## 환경 정보
+## Environment
 
-- **Tempo 주소**: `config/env/.env`의 `MONITORING_SERVER_IP` 값 사용 → `http://{IP}:3200`
-- **인증**: Bearer token (`MONITORING_API_TOKEN`, `config/env/.env`에서 읽음)
-- **저장 경로**: 프로젝트 루트 `prod_trace/` 폴더 (`.gitignore` 등록됨)
+- **Tempo address**: use `MONITORING_SERVER_IP` from `config/env/.env` → `http://{IP}:3200`
+- **Auth**: Bearer token (`MONITORING_API_TOKEN`, read from `config/env/.env`)
+- **Save path**: `prod_trace/` folder at the project root (registered in `.gitignore`)
 
-## 프로세스
+## Process
 
-### 1단계: MONITORING_SERVER_IP 읽기 및 서비스 목록 조회
+### Step 1: Read MONITORING_SERVER_IP and fetch service list
 
-`AskUserQuestion` 호출 **전에** 먼저 IP·토큰을 읽고 Tempo에서 실제 서비스 목록을 가져온다.
+**Before** calling `AskUserQuestion`, read the IP/token and fetch the actual service list from Tempo.
 
 ```bash
 MONITORING_IP=$(grep 'MONITORING_SERVER_IP' config/env/.env | cut -d'=' -f2 | tr -d ' ')
@@ -44,40 +44,40 @@ MONITORING_API_TOKEN=$(grep 'MONITORING_API_TOKEN' config/env/.env | cut -d'=' -
 TEMPO_URL="http://${MONITORING_IP}:3200"
 ```
 
-서비스명 목록 조회:
+Fetch the service name list:
 
 ```bash
 curl -s \
   -H "Authorization: Bearer ${MONITORING_API_TOKEN}" \
   "${TEMPO_URL}/api/search/tag/service.name/values"
-# 응답 예: { "tagValues": ["application-server", "another-service"] }
+# Response example: { "tagValues": ["application-server", "another-service"] }
 ```
 
-조회 결과를 파싱해 서비스명 배열을 만든다. 조회 실패 시 오류를 출력하고 중단한다.
+Parse the response to build the service name array. On failure, print an error and abort.
 
-### 2단계: 필수 정보 수집
+### Step 2: Collect required info
 
-1단계에서 얻은 서비스명 목록을 `AskUserQuestion` 옵션으로 제시한다. 서비스명·최소 소요시간·시간 범위를 동시에 확인한다.
+Present the service name list from Step 1 as `AskUserQuestion` options. Confirm service name, minimum duration, and time range simultaneously.
 
-**서비스명**: 1단계에서 조회한 `tagValues` 배열을 그대로 옵션으로 사용한다.
-- 예: `application-server`, `another-service` … (조회된 값이 곧 선택지)
-- `AskUserQuestion`의 옵션 개수 상한(4개)을 초과하면 상위 3개를 옵션으로 제시하고 나머지는 Other(직접 입력)로 안내한다.
+**Service name**: use the `tagValues` array obtained in Step 1 as options directly.
+- Example: `application-server`, `another-service`, … (fetched values become choices)
+- If the number exceeds the `AskUserQuestion` option limit (4), present the top 3 as options and route the rest via Other (custom input).
 
-**최소 소요시간 (minDuration)** 옵션:
+**Minimum duration (minDuration)** options:
 - 500ms
 - 1s
 - 2s
 - 5s
 
-**시간 범위** 옵션:
-- 최근 30분
-- 최근 1시간
-- 최근 3시간
-- 직접 입력 (분 단위)
+**Time range** options:
+- Last 30 minutes
+- Last 1 hour
+- Last 3 hours
+- Custom (in minutes)
 
-선택 사항: 최대 결과 수 (기본값 100, 최대 1000)
+Optional: maximum result count (default 100, max 1000)
 
-### 3단계: 저장 폴더 생성
+### Step 3: Create save folder
 
 ```bash
 DATETIME=$(date '+%Y-%m-%d-%H%M%S')
@@ -85,29 +85,29 @@ FOLDER="prod_trace/${DATETIME}-export"
 mkdir -p "$FOLDER"
 ```
 
-### 4단계: 타임스탬프 계산
+### Step 4: Compute timestamps
 
-macOS 환경이므로 `python3`으로 초 단위 Unix 타임스탬프를 생성한다.
+On macOS, use `python3` to generate second-precision Unix timestamps.
 
 ```bash
 END=$(python3 -c "import time; print(int(time.time()))")
-START=$(python3 -c "import time; print(int(time.time()) - {초})")
+START=$(python3 -c "import time; print(int(time.time()) - {seconds})")
 ```
 
-시간 범위 → 초 변환:
-- 30분 → 1800
-- 1시간 → 3600
-- 3시간 → 10800
+Time range → seconds:
+- 30 min → 1800
+- 1 hour → 3600
+- 3 hours → 10800
 
-### 5단계: Tempo Search API 호출
+### Step 5: Call Tempo Search API
 
-Tempo `/api/search` 엔드포인트를 사용한다. 반드시 `curl -G` GET 방식을 사용한다 (POST 방식은 필터가 무시됨).
+Use Tempo's `/api/search` endpoint. Must use `curl -G` GET method (filters are ignored with POST).
 
 ```bash
 curl -G -s \
   -H "Authorization: Bearer ${MONITORING_API_TOKEN}" \
   "${TEMPO_URL}/api/search" \
-  --data-urlencode "tags=service.name={서비스명}" \
+  --data-urlencode "tags=service.name={service-name}" \
   --data-urlencode "minDuration={minDuration}" \
   --data-urlencode "start=${START}" \
   --data-urlencode "end=${END}" \
@@ -115,7 +115,7 @@ curl -G -s \
   > "${FOLDER}/search-result.json"
 ```
 
-**응답 구조 예시:**
+**Response structure example:**
 ```json
 {
   "traces": [
@@ -133,11 +133,11 @@ curl -G -s \
 }
 ```
 
-API 호출 실패(HTTP 오류, 빈 응답 등) 시 오류 메시지를 출력하고 중단한다.
+On API failure (HTTP error, empty response, etc.), print an error message and abort.
 
-### 6단계: 요약 파일 생성
+### Step 6: Generate summary file
 
-원본 JSON에서 핵심 필드만 추출해 `traces-summary.json`을 생성한다.
+Extract key fields from the raw JSON to create `traces-summary.json`.
 
 ```bash
 python3 -c "
@@ -153,8 +153,8 @@ summary = {
     'total': len(traces),
     'inspectedTraces': metrics.get('inspectedTraces', 0),
     'minDuration': '{minDuration}',
-    'serviceName': '{서비스명}',
-    'timeRange': '{시간 범위}',
+    'serviceName': '{service-name}',
+    'timeRange': '{time-range}',
     'exportedAt': '$(date)',
     'traces': [
         {
@@ -171,21 +171,21 @@ summary = {
 with open('${FOLDER}/traces-summary.json', 'w') as f:
     json.dump(summary, f, ensure_ascii=False, indent=2)
 
-print(f'총 {len(traces)}건')
+print(f'Total {len(traces)} entries')
 "
 ```
 
-### 7단계: 결과 요약 출력
+### Step 7: Print result summary
 
 ```
-✅ 트레이스 목록 추출 완료
-- 서비스명: {서비스명}
-- 최소 소요시간: {minDuration}
-- 시간 범위: 최근 {N}분
-- 추출 건수: {N}건 / 검사된 트레이스: {N}건
-- 저장 경로: {FOLDER}/
+✅ Trace list extraction complete
+- Service name: {service-name}
+- Minimum duration: {minDuration}
+- Time range: last {N} minutes
+- Extracted: {N} / Inspected traces: {N}
+- Save path: {FOLDER}/
 
-상위 10건 (소요시간 내림차순):
+Top 10 (by duration, descending):
 ┌─────────────────────────────────────────┬────────────┐
 │ rootTraceName                           │ durationMs │
 ├─────────────────────────────────────────┼────────────┤
@@ -193,16 +193,16 @@ print(f'총 {len(traces)}건')
 │ ...                                     │  ...       │
 └─────────────────────────────────────────┴────────────┘
 
-파일:
-- search-result.json : Tempo API 원본 응답 전체
-- traces-summary.json: 핵심 필드 추출 + 소요시간 내림차순 정렬
+Files:
+- search-result.json : full raw Tempo API response
+- traces-summary.json: key fields extracted + sorted by duration descending
 ```
 
-## 규칙
+## Rules
 
-- `start` / `end`는 **초 단위** Unix 타임스탬프 정수를 사용한다 (`prod-trace`와 동일).
-- Tempo Search API는 반드시 `curl -G` GET 방식을 사용한다. POST 방식은 필터가 무시된다.
-- `prod_trace/` 폴더는 `.gitignore`에 등록되어 있어 커밋되지 않는다.
-- 결과가 0건이면 오류가 아님을 알리고, 시간 범위 또는 minDuration을 조정해 재시도를 안내한다.
-- `limit` 기본값은 100, 최대 1000. 1000건 초과 시 Tempo API 제한으로 잘릴 수 있음을 안내한다.
-- `prod-trace`와의 차이: 이 스킬은 트레이스 **목록 추출**이 목적이며 스팬 드릴다운은 수행하지 않는다. 특정 traceID의 스팬 분석이 필요하면 `/prod-trace`를 사용한다.
+- `start` / `end` are **integer Unix timestamps in seconds** (same as `prod-trace`).
+- The Tempo Search API must use `curl -G` GET method. Filters are ignored with POST.
+- The `prod_trace/` folder is registered in `.gitignore` and is not committed.
+- When there are 0 results, announce it is not an error and guide the user to adjust the time range or minDuration and retry.
+- `limit` defaults to 100, max 1000. If over 1000, warn that Tempo API limits may truncate the results.
+- Difference from `prod-trace`: this skill targets **trace list extraction** and does not perform span drill-down. For span analysis of a specific traceID, use `/prod-trace`.

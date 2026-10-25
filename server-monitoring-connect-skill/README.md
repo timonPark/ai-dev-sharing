@@ -1,11 +1,11 @@
 # server-monitoring-connect-skill
 
-Grafana(Loki · Tempo · Prometheus) 연동 Claude Code 스킬 모음입니다.  
-운영 서버의 로그·트레이스·메트릭을 CLI에서 조회하고 파일로 저장합니다.
+A collection of Claude Code skills integrated with Grafana (Loki · Tempo · Prometheus).
+Query production server logs, traces, and metrics from the CLI and save them to files.
 
-## 환경 설정
+## Environment setup
 
-`config/env/.env` 에 모니터링 서버 정보를 입력합니다.
+Enter monitoring server details in `config/env/.env`.
 
 ```
 MONITORING_SERVER_IP=
@@ -17,46 +17,46 @@ DCARE_MASTER_KEY=
 DCARE_REST_API_KEY=
 ```
 
-## 스킬 목록
+## Skill list
 
 ### `/prod-log`
-Loki에서 production-1~4 서버 로그를 일괄 조회합니다.
-- userIdx / URI 경로 / 에러 메시지 / 키워드 검색
-- 결과: `prod_log/{날짜-키워드}/production-{1~4}.json`
+Batch query production-1~4 server logs from Loki.
+- Search by userIdx / URI path / error message / keyword
+- Output: `prod_log/{date-keyword}/production-{1~4}.json`
 
 ### `/prod-metrics`
-Prometheus에서 PromQL 메트릭을 조회합니다.
-- 애플리케이션 (HTTP P95 응답시간, 요청수, 에러율)
-- MongoDB (쿼리 레이턴시, 연결수, 도큐먼트 작업)
-- Redis (캐시 히트율, 메모리, 슬로우 커맨드, eviction)
-- 결과: `prod_metrics/{날짜}-metrics/`
+Query PromQL metrics from Prometheus.
+- Application (HTTP P95 response time, request count, error rate)
+- MongoDB (query latency, connection count, document operations)
+- Redis (cache hit rate, memory, slow commands, eviction)
+- Output: `prod_metrics/{date}-metrics/`
 
 ### `/prod-trace`
-Tempo에서 특정 API 요청의 트레이스를 조회하고 스팬별 병목을 분석합니다.
-- traceId 직접 조회 또는 HTTP 경로·서비스명으로 검색
-- 결과: `prod_trace/{날짜}-trace/`
+Query the trace of a specific API request from Tempo and analyze per-span bottlenecks.
+- Direct lookup by traceId, or search by HTTP path / service name
+- Output: `prod_trace/{date}-trace/`
 
 ### `/prod-trace-export`
-Tempo에서 서비스명·최소 소요시간 기준으로 트레이스 목록을 일괄 추출합니다.
-- 결과: `prod_trace/{날짜}-export/search-result.json`, `traces-summary.json`
+Batch-extract a list of traces from Tempo by service name and minimum duration.
+- Output: `prod_trace/{date}-export/search-result.json`, `traces-summary.json`
 
 ### `/tempo-search`
-TraceQL(service.name + span name)로 날짜 범위를 반복 조회해 성능 분포를 분석합니다.
-- 날짜 목록 쉼표 구분 입력, KST 시간 범위 지정
-- 결과: `prod_trace/{폴더명}/{날짜}/` + `traces-timeline.csv`
+Iteratively query a date range via TraceQL (service.name + span name) and analyze performance distribution.
+- Date list is comma-separated input; KST time range specified
+- Output: `prod_trace/{folder-name}/{date}/` + `traces-timeline.csv`
 
-## 권장 사용 순서
+## Recommended usage order
 
 ```
-1. /prod-metrics      → 이상 구간 시간대 확인
-2. /prod-log          → 해당 시간대 에러·슬로우 로그 확인
-3. /prod-trace-export → 느린 트레이스 목록 추출
-4. /prod-trace        → 특정 traceId 스팬 드릴다운
+1. /prod-metrics      → Identify anomalous time windows
+2. /prod-log          → Check error/slow logs in that window
+3. /prod-trace-export → Extract list of slow traces
+4. /prod-trace        → Drill down into spans of a specific traceId
 ```
 
-## 저장 경로
+## Save paths
 
-조회 결과는 아래 경로에 저장되며 `.gitignore`로 커밋에서 제외됩니다.
+Query results are saved to the paths below and excluded from commits via `.gitignore`.
 
 ```
 prod_log/
